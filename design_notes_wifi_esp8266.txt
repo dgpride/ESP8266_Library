@@ -1,0 +1,151 @@
+= Design Notes for WiFi and Socket Configuration over ESP8266
+
+== Requirement:
+
+   For enabling WiFi client on NuttX and ZDev based boards using
+   ESP8266 WiFi module through serial UART interface.
+
+image::design_diagram.png[align="center"]
+
+== Problem:
+
+   ESP8266 provides AT instruction set through which WiFi and Socket
+   functionalities can be enabled. But, for NuttX and ZDev
+   environments, to increase readability and ease of programming, a
+   POSIX compliant C library need to be developed.
+
+== Standard APIs and Equivalent AT Commands:
+
+   POSIX compliant APIs are not available for WLAN, however in NuttX,
+   WLAN implementation for C3000 was brought up with APIs as
+   follows. We work to develop APIs meeting this API library. However,
+   at this point I have planned not to implement the same function
+   parameters to keep the development fast and simple.
+
+== WiFi APIs:
+
+=== wlan_init
+
+    Initializes WLAN driver for ESP8266 communication. (i.e., UART
+    driver in NUttX or ZDev in this case)
+
+=== wlan_start
+
+    Starts WLAN ESP8266 with following initialization. (i.e., hardware
+    initialization)
+
+    AT Commands:
+
+    ATE0            - Disables echoing of serial commands
+
+    AT+CWMODE=1     - Sets ESP8266 in STATION mode
+
+    AT+CWDHCP=1,1   - Enables DHCP Client in STATION mode
+
+    AT+CWAUTOCONN=0 - Disable autoconnect mode
+
+=== wlan_stop
+
+    Stops WLAN device and puts it in its reset state.
+
+    AT Commands:
+
+    AT+RST          - REsets the ESP8266 module
+
+    AT+CWMODE=1     - Sets ESP8266 in STATION mode
+
+    AT+CWAUTOCONN=0 - Disable autoconnect mode
+
+=== wlan_connect
+
+    Connects to AP specified by SSID and Encryption Key(PASSWORD)
+
+    AT Commands:
+
+    AT+CWJAP="<ssid>","<password>" - Connects to the given SSID with
+    				     the PASSWORD provided.
+
+    On successful connection, it displays network info such as SSID,
+    AP MAC, RSSI, Encryption type, IP issued.
+
+=== wlan_disconnect
+
+    Disconnects connection from AP.
+
+    AT Commands:
+
+    AT+CWJAP?	- Checks whether the device is connected to any AP and
+    	      	  displays the SSID, if connected. Else, returns No AP.
+
+    AT+CWQAP  	- Disconnects from the connected AP
+
+=== wlan_add_profile
+
+    When connecting to an AP, the device saves profile of the AP in a
+    datastructure and when Autoconnect is enabled, the devices chooses
+    the highest priority profile based on the security policy, signal
+    strength, etc. based on the connection policy specified. The
+    profile should be saved in Flash memory (Non-volatile memory) of
+    the micro-controller.
+
+=== wlan_ioctl_del_profile
+
+    Deletes WLAN profiles based on number of profiles specified by the
+    parameter passed.
+
+=== wlan_ioctl_set_connection_policy
+
+    When AUTO mode is enabled,
+
+    1) If fast connect is enabled and last connected profile is valid,
+    the device will try to connect to it.
+
+    2) If fast connect is enabled and last connected profile is
+    invalid or it doesn't exist, the device will try connecting to
+    other valid profiles based on policies set.
+
+    3) If OPEN mode is enabled and no profiles are found, the device
+    will try connecting to any AP.
+
+=== wlan_ioctl_get_scan_results
+
+    Lists all APs in range. The List shall be sorted based on
+    Encryption type or signal strength.
+
+The APIs listed below are not planned to be implemented by this time.
+
+=== wlan_set_event_mask
+
+    ---
+
+=== wlan_ioctrl_statusget
+
+    ---
+    
+=== wlan_ioctl_set_scan_params
+
+    ---
+
+=== wlan_smart_config_start
+
+    ---
+
+=== wlan_smart_config_stop
+
+    ---
+
+=== wlan_smart_config_set_prefix
+
+    ---
+
+=== wlan_smart_config_process
+
+    ---
+
+=== aes_read_key
+
+    ---
+
+=== aes_write_key
+
+    ---
