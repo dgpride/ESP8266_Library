@@ -11,8 +11,6 @@
 #ifndef __ESP8266_H
 #define __ESP8266_H
 
-#include "serialib.c"
-
 #define CMD_BUF_SIZE                    100
 #define RECV_BUF_SIZE                   512
 #define ESP_BAUDRATE                    115200
@@ -64,10 +62,7 @@
 
 #define AP_SSID_GET                     "AT+CWJAP?\r\n"
 
-/* LOCAL VARIABLES */
-
-static int esp_fd;
-static char read_buf[RECV_BUF_SIZE] = {'\0'};
+/* Global VARIABLES */
 
 char *ecn_type[] = {"OPEN",
 		    "WEP",
@@ -76,15 +71,15 @@ char *ecn_type[] = {"OPEN",
 		    "WPA_WPA2_PSK"};
 
 typedef struct ap_data {
-    char ssid[MAX_SSID_LEN]; /*ssid of AP */
-    char mac[18]; //[6][2]; /* MAC address of AP */
-    char pwd[65]; /* Login Password */
-    char ip[16]; /* Station IP */
-    int rssi; /* Received Signal Strength Indication */
-    unsigned int ecn; /* Encryption type */
-    unsigned int channel;
-    struct ap_data *prev;
-    struct ap_data *next;
+	char ssid[MAX_SSID_LEN]; /*ssid of AP */
+	char mac[18]; //[6][2]; /* MAC address of AP */
+	char pwd[65]; /* Login Password */
+	char ip[16]; /* Station IP */
+	int rssi; /* Received Signal Strength Indication */
+	unsigned int ecn; /* Encryption type */
+	unsigned int channel;
+	struct ap_data *prev;
+	struct ap_data *next;
 } apdata_t;
 
 apdata_t ap_current, ap_node[10];

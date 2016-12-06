@@ -33,7 +33,10 @@
 #include <string.h>
 #include <stdio.h>
 #include <errno.h>
+#include <ioctl.h>
 #include "esp8266.h"
+
+static char read_buf[RECV_BUF_SIZE] = {'\0'};
 
 /*static char esp8266_getchar(int esp_fd)
 {
@@ -45,97 +48,97 @@
 
 static void esp8266_getline(char *line_buf)
 {
-    int i = 0;
-    
-    do {
-	serial_read_char(esp_fd, &line_buf[i++], 0);
-//	printf("%c", line_buf[i - 1]);
+	int i = 0;
+
+	do {
+		serial_read_char(esp_fd, &line_buf[i++], 0);
+//		printf("%c", line_buf[i - 1]);
     } while ((line_buf[i - 1] != '\r') && (line_buf[i - 1] != '\n'));
     
-//    line_buf[i - 1] = '\n';
-    line_buf[i] = '\0';
-    strcat(read_buf, line_buf);
+//	line_buf[i - 1] = '\n';
+	line_buf[i] = '\0';
+	strcat(read_buf, line_buf);
 }
 
 static int esp8266_status(int esp_fd, char *line_buf)
 {
-    if (line_buf == NULL) {
-	char temp[RECV_BUF_SIZE];
-	line_buf = temp;
-    }
+	if (line_buf == NULL) {
+		char temp[RECV_BUF_SIZE];
+		line_buf = temp;
+	}
     
-    do {
-	esp8266_getline(line_buf);
-    } while ((strncmp(line_buf, "OK", strlen("OK")))
-	     && (strncmp(line_buf, "ERROR", strlen("ERROR")))
-	     && (strncmp(line_buf, "FAIL", strlen("FAIL"))));
+	do {
+		esp8266_getline(line_buf);
+	} while ((strncmp(line_buf, "OK", strlen("OK"))) &&
+		 (strncmp(line_buf, "ERROR", strlen("ERROR"))) &&
+		 (strncmp(line_buf, "FAIL", strlen("FAIL"))));
     
-    if (!strncmp(line_buf, "OK", strlen("OK")))
-	return 0; /* Command written to esp8266 successfully */
-    else if (!strncmp(line_buf, "ERROR", strlen("ERROR")))
-	return -1; /* Command write to esp8266 error */
-    else if (!strncmp(line_buf, "FAIL", strlen("FAIL")))
-	return -2; /* Failed to execute command */
+	if (!strncmp(line_buf, "OK", strlen("OK")))
+		return 0; /* Command written to esp8266 successfully */
+	else if (!strncmp(line_buf, "ERROR", strlen("ERROR")))
+		return -1; /* Command write to esp8266 error */
+	else if (!strncmp(line_buf, "FAIL", strlen("FAIL")))
+		return -2; /* Failed to execute command */
 }
 
 static int esp8266_open(char *esp_port, unsigned int baudrate)
 {
-    int fd;
-    
-    fd = serial_open(esp_port, baudrate);
-    
-    if (fd == -1) {
-	printf("Cannot open port '%s'..\n", esp_port);
-    } else if (fd == -2) {
-	printf("Baudrate error..\n");
-    } else if (fd > 0) {
-	printf("Port '%s' opened successfully..\n", esp_port);
-	return fd;
-    }
-    exit(1);
+	int fd;
+
+	fd = serial_open(esp_port, baudrate);
+
+	if (fd == -1) {
+		printf("Cannot open port '%s'..\n", esp_port);
+	} else if (fd == -2) {
+		printf("Baudrate error..\n");
+	} else if (fd > 0) {
+		printf("Port '%s' opened successfully..\n", esp_port);
+		return fd;
+	}
+	exit(1);
 }
 
 static void esp8266_close(int esp_fd)
 {
-    serial_close(esp_fd);
+	serial_close(esp_fd);
 }
 
 static void esp8266_write(int esp_fd, const void *buffer, unsigned int nbytes)
 {
-    serial_write(esp_fd, buffer, nbytes);
+	serial_write(esp_fd, buffer, nbytes);
 }
 
 static void esp8266_parse_line(char *line_buf, apdata_t *ptr)
 {
-    int i;
-    int j;
-    char field[73] = {'\0'};
+	int i;
+	int j;
+	char field[73] = {'\0'};
 
-    ptr->ecn = atoi(&line_buf[8]);
+	ptr->ecn = atoi(&line_buf[8]);
 
-    for (i = 0, j = 11; line_buf[j] != '"' && j < 84; i++, j++)
-      field[i] = line_buf[j];
-    if (j < 84 && line_buf[j] == '"') {
-	field[i] = '\0';
-	strcpy(ptr->ssid, field);
-    } else {
-	printf("SSID exceeds allowable string length.\n");
-	exit(1);
-    }
-    j += 2;
-    ptr->rssi = atoi(&line_buf[j]);
+	for (i = 0, j = 11; line_buf[j] != '"' && j < 84; i++, j++)
+		field[i] = line_buf[j];
+	if (j < 84 && line_buf[j] == '"') {
+		field[i] = '\0';
+		strcpy(ptr->ssid, field);
+	} else {
+		printf("SSID exceeds allowable string length.\n");
+		exit(1);
+	}
+	j += 2;
+	ptr->rssi = atoi(&line_buf[j]);
     
-    for (;atoi(&line_buf[j]); j++);
+	for (;atoi(&line_buf[j]); j++);
     
-    j += 2;
+	j += 2;
 
-    for (i = 0; line_buf[j] != '"'; i++, j++) {
-	ptr->mac[i] = line_buf[j];
-    }
-    ptr->mac[i] = '\0';
-    j += 2;
+	for (i = 0; line_buf[j] != '"'; i++, j++) {
+		ptr->mac[i] = line_buf[j];
+	}
+	ptr->mac[i] = '\0';
+	j += 2;
 
-    ptr->channel = atoi(&line_buf[j]);
+	ptr->channel = atoi(&line_buf[j]);
 
 }
 
@@ -147,103 +150,104 @@ static void esp8266_parse_line(char *line_buf, apdata_t *ptr)
 
 int esp8266_init(char *esp_port)
 {
-    /* Opens serial port with the baudrate specified and provides a file
-       handle */
-    esp_fd = esp8266_open(esp_port, ESP_BAUDRATE);
-    return esp_fd;
+	/*
+	 * Opens serial port with the baudrate specified and provides a file
+	 * handle
+	 */
+	return esp8266_open(esp_port, ESP_BAUDRATE);
 }
 
-void esp8266_start()
+void esp8266_start(int esp_fd)
 {
-    int err_no;
+	int err_no;
 
-    /* Echo mode disabled */
-    esp8266_write(esp_fd, ESP_ECHO_OFF, strlen(ESP_ECHO_OFF));
-    err_no = esp8266_status(esp_fd, NULL);
-    if (err_no)
-	printf("ERROR: ECHO: Write Failed..\n");
+	/* Echo mode disabled */
+	esp8266_write(esp_fd, ESP_ECHO_OFF, strlen(ESP_ECHO_OFF));
+	err_no = esp8266_status(esp_fd, NULL);
+
+	if (err_no)
+		printf("ERROR: ECHO: Write Failed..\n");
     
-    /* Configure ESP8266 in STATION mode */
-    esp8266_write(esp_fd, WIFI_MODE_SET_STA, strlen(WIFI_MODE_SET_STA));
-    err_no = esp8266_status(esp_fd, NULL);
-    if (!err_no)
-	printf("Started as STATION..\n");
-    else {
-	printf("ERROR: Cannot start as STATION..\n");
-	exit(0);
-    }
+	/* Configure ESP8266 in STATION mode */
+	esp8266_write(esp_fd, WIFI_MODE_SET_STA, strlen(WIFI_MODE_SET_STA));
+	err_no = esp8266_status(esp_fd, NULL);
+	if (!err_no)
+		printf("Started as STATION..\n");
+	else {
+		printf("ERROR: Cannot start as STATION..\n");
+		exit(0);
+	}
 
-    /* Enable DHCP Client in STATION mode */
-    esp8266_write(esp_fd, ESP_DHCP_CLIENT_ENABLE,
-		  strlen(ESP_DHCP_CLIENT_ENABLE));
-    err_no = esp8266_status(esp_fd, NULL);
-    if (!err_no)
-	printf("DHCP client enabled..\n");
+	/* Enable DHCP Client in STATION mode */
+	esp8266_write(esp_fd, ESP_DHCP_CLIENT_ENABLE,
+		      strlen(ESP_DHCP_CLIENT_ENABLE));
+	err_no = esp8266_status(esp_fd, NULL);
+	if (!err_no)
+		printf("DHCP client enabled..\n");
 }
 
 void esp8266_stop(int esp_fd)
 {
-    esp8266_close(esp_fd);
-    printf("Connection closed.\n");
+	esp8266_close(esp_fd);
+	printf("Connection closed.\n");
 }
 
 void esp8266_get_info(char *ssid)
 {
-    int i, j;
-    char line_buf[RECV_BUF_SIZE] = {'\0'};
-    char field[73] = {'\0'};
-    char *command = malloc(sizeof(GET_AP_INFO)
-			   + sizeof(ssid)
-			   + sizeof("\"\r\n"));
+	int i, j;
+	char line_buf[RECV_BUF_SIZE] = {'\0'};
+	char field[73] = {'\0'};
+	char *command = malloc(sizeof(GET_AP_INFO)
+			       + sizeof(ssid)
+			       + sizeof("\"\r\n"));
 
-    printf("Connection details..\n");
+	printf("Connection details..\n");
 
-    /* Gets SSID, RSSI, MAC, Channel, Encryption */
-    command[0] = '\0';
-   
-    strcat(command, GET_AP_INFO);
-    strcat(command, ssid);
-    strcat(command, "\"\r\n");
+	/* Gets SSID, RSSI, MAC, Channel, Encryption */
+	command[0] = '\0';
+
+	strcat(command, GET_AP_INFO);
+	strcat(command, ssid);
+	strcat(command, "\"\r\n");
+
+	esp8266_write(esp_fd, command, strlen(command));
+
+	do {
+		esp8266_getline(line_buf);
+	} while (strncmp(line_buf, "+CWLAP:(", strlen("+CWLAP:(")));
     
-    esp8266_write(esp_fd, command, strlen(command));
+	esp8266_parse_line(line_buf, &ap_current);
+	free(command);
+
+	/* Get STATION IP */
+	command[0] = '\0';
+
+	strcat(command, GET_STA_IP);
+	esp8266_write(esp_fd, command, strlen(command));
+
+	do {
+		esp8266_getline(line_buf);
+	} while (strncmp(line_buf, "+CIPSTA:\"", strlen("+CIPSTA:\"")));
+
+	for (i = 0, j = 9; line_buf[j] != '"' && j < 84; i++, j++)
+		field[i] = line_buf[j];
+
+	if (j < 24 && line_buf[j] == '"') {
+		field[i] = '\0';
+		strcpy(ap_current.ip, field);
+	}
     
-    do {
-	esp8266_getline(line_buf);
-    } while (strncmp(line_buf, "+CWLAP:(", strlen("+CWLAP:(")));
-    
-    esp8266_parse_line(line_buf, &ap_current);
-    free(command);
-
-    /* Get STATION IP */
-    command[0] = '\0';
-
-    strcat(command, GET_STA_IP);
-    esp8266_write(esp_fd, command, strlen(command));
-
-    do {
-	esp8266_getline(line_buf);
-    } while (strncmp(line_buf, "+CIPSTA:\"", strlen("+CIPSTA:\"")));
-
-
-    for (i = 0, j = 9; line_buf[j] != '"' && j < 84; i++, j++)
-      field[i] = line_buf[j];
-    if (j < 24 && line_buf[j] == '"') {
-	field[i] = '\0';
-	strcpy(ap_current.ip, field);
-    }
-    
-    printf("SSID: %s, "
-	   "AP MAC: %s\n"
-	   "RSSI: %d, "
-	   "Channel: %d, "
-	   "Encryption: %s\n"
-	   "STA IP: %s, \n",
-	   ap_current.ssid, ap_current.mac, ap_current.rssi, ap_current.channel, ecn_type[ap_current.ecn], ap_current.ip);
+	printf("SSID: %s, "
+		"AP MAC: %s\n"
+		"RSSI: %d, "
+		"Channel: %d, "
+		"Encryption: %s\n"
+		"STA IP: %s, \n",
+		ap_current.ssid, ap_current.mac, ap_current.rssi,
+		ap_current.channel, ecn_type[ap_current.ecn], ap_current.ip);
 }
 
 /*
-  
-
   esp8266_write(esp_fd, GET_STA_IP, strlen(GET_STA_IP));
   esp8266_write(esp_fd, GET_STA_MAC, strlen(GET_STA_MAC));
   esp8266_write(esp_fd, AP_SSID_GET, strlen(AP_SSID_GET));
@@ -251,66 +255,65 @@ void esp8266_get_info(char *ssid)
 
 void esp8266_scan()
 {
-    char line_buf[RECV_BUF_SIZE] = {'\0'};
-    int error;
+	char line_buf[RECV_BUF_SIZE] = {'\0'};
+	int error;
 
-    read_buf[0] = '\0'; /* To clear read_buf */
+	read_buf[0] = '\0'; /* To clear read_buf */
 
-    printf("Scan APs..\n");
-    esp8266_write(esp_fd, SCAN_AP, strlen(SCAN_AP));
+	printf("Scan APs..\n");
+	esp8266_write(esp_fd, SCAN_AP, strlen(SCAN_AP));
 
-    /* Checks whether the write operation is successful or failed */
-    error = esp8266_status(esp_fd, line_buf);
-    if (!error) {
-	printf("APs in range..\n");
+	/* Checks whether the write operation is successful or failed */
+	error = esp8266_status(esp_fd, line_buf);
+	if (!error) {
+		printf("APs in range..\n");
 	//	esp8266_parse_list();
-	puts(read_buf);
-    } else if (error == -1) {
-	printf("Error: Serial write error.");
-	exit(1);
-    } else if (error == -2) {
-	printf("Error: Scan Failed.");
-	exit(1);
-    }
-//    esp8266_close(esp_fd);
+		puts(read_buf);
+	} else if (error == -1) {
+		printf("Error: Serial write error.");
+		exit(1);
+	} else if (error == -2) {
+		printf("Error: Scan Failed.");
+		exit(1);
+	}
+//	esp8266_close(esp_fd);
 }
 
 void esp8266_connect(char *ssid, char *pwd)
 {
-    int err_no;
-    char *command = malloc(sizeof(AP_CONNECT)
-			   + sizeof(ssid)
-			   + sizeof("\",\"")
-			   + sizeof(pwd)
-			   + sizeof("\"\r\n"));
+	int err_no;
+	char *command = malloc(sizeof(AP_CONNECT)
+			       + sizeof(ssid)
+			       + sizeof("\",\"")
+			       + sizeof(pwd)
+			       + sizeof("\"\r\n"));
     
-    command[0]='\0';
-    strcat(command, AP_CONNECT);
-    strcat(command, ssid);
-    strcat(command, "\",\"");
-    strcat(command, pwd);
-    strcat(command, "\"\r\n");
-    
-    printf("Connecting to '%s'.. \n", ssid);
-    esp8266_write(esp_fd, command, strlen(command));
-    err_no = esp8266_status(esp_fd, NULL);
+	command[0]='\0';
+	strcat(command, AP_CONNECT);
+	strcat(command, ssid);
+	strcat(command, "\",\"");
+	strcat(command, pwd);
+	strcat(command, "\"\r\n");
 
-    if (!err_no) { /* Prints Connection details */
-	printf("\rDONE.\n");
-	free(command);
-	strcpy(ap_current.pwd, pwd);
-	esp8266_get_info(ssid);
+	printf("Connecting to '%s'.. \n", ssid);
+	esp8266_write(esp_fd, command, strlen(command));
+	err_no = esp8266_status(esp_fd, NULL);
 
-    } else if (err_no == -2) {
-	printf("\rFAILED.\n");
-    } else if (err_no == -1) {
-	printf("\rERROR.\n");
-    }
+	if (!err_no) { /* Prints Connection details */
+		printf("\rDONE.\n");
+		free(command);
+		strcpy(ap_current.pwd, pwd);
+		esp8266_get_info(ssid);
+	} else if (err_no == -2) {
+		printf("\rFAILED.\n");
+	} else if (err_no == -1) {
+		printf("\rERROR.\n");
+	}
 }
 
 void esp8266_disconnect () {
-    printf("Disconnecting from '%s'.. ", ap_current.ssid);
+	printf("Disconnecting from '%s'.. ", ap_current.ssid);
   
-    esp8266_write(esp_fd, AP_DISCONNECT, strlen(AP_DISCONNECT));
-    printf("DONE.\n");
+	esp8266_write(esp_fd, AP_DISCONNECT, strlen(AP_DISCONNECT));
+	printf("DONE.\n");
 }
