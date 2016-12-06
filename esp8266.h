@@ -103,7 +103,7 @@ static void esp8266_parse_line(char *line_buf, apdata_t *ptr);
  */
 int esp8266_init(char *esp_port);
 
-void esp8266_start();
+void esp8266_start(int esp_fd);
 
 void esp8266_stop(int esp_fd);
 
@@ -116,7 +116,7 @@ void esp8266_get_info(char *ssid);
   esp8266_write(esp_fd, AP_SSID_GET, strlen(AP_SSID_GET));
 */
 
-void esp8266_scan();
+void esp8266_scan(int esp_fd);
 
 void esp8266_connect(char *ssid, char *pwd);
 

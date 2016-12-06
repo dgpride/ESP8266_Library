@@ -1,7 +1,7 @@
 #include <stdio.h>
 #include <ctype.h>
 #include <unistd.h>
-#include "esp8266_wifi.c"
+#include "esp8266.h"
 
 #define MAX_LEN        73
 
@@ -43,6 +43,7 @@ int main(int argc, char *argv[])
 	int i;
 	int j = 0;
 	int fd;
+	int err_no;
     
 	for (i = 0; i < argc; i++) {
 		if (argv[i][0] == '-' &&
@@ -61,8 +62,12 @@ int main(int argc, char *argv[])
 	}
     
 	fd = esp8266_init(port);
-	esp8266_start(fd);
-	esp8266_scan();
+	err_no = esp8266_start(fd);
+
+	if (err_no)
+		exit(1);
+
+	esp8266_scan(fd);
 	get_ssid_pwd();
 	esp8266_connect(ssid, pwd);
 	esp8266_get_info(NULL);

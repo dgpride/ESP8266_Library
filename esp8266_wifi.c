@@ -103,9 +103,17 @@ static void esp8266_close(int esp_fd)
 	serial_close(esp_fd);
 }
 
-static void esp8266_write(int esp_fd, const void *buffer, unsigned int nbytes)
+static char esp8266_write(int esp_fd, const void *buffer, unsigned int nbytes)
 {
-	serial_write(esp_fd, buffer, nbytes);
+	char err_no;
+
+	err_no = serial_write(esp_fd, buffer, nbytes);
+
+	if (err_no == 1)
+		return 0;
+
+	printf("Serial write to port failed.\n");
+	return err_no;
 }
 
 static void esp8266_parse_line(char *line_buf, apdata_t *ptr)
@@ -157,33 +165,47 @@ int esp8266_init(char *esp_port)
 	return esp8266_open(esp_port, ESP_BAUDRATE);
 }
 
+/*
+ * esp8266_start disables the echo mode and configures as STATION by default
+ * with DHCP client enabled.
+ */
 void esp8266_start(int esp_fd)
 {
 	int err_no;
 
 	/* Echo mode disabled */
-	esp8266_write(esp_fd, ESP_ECHO_OFF, strlen(ESP_ECHO_OFF));
-	err_no = esp8266_status(esp_fd, NULL);
+	err_no = esp8266_write(esp_fd, ESP_ECHO_OFF, strlen(ESP_ECHO_OFF));
+
+	if (!err_no)
+		err_no = esp8266_status(esp_fd, NULL);
 
 	if (err_no)
-		printf("ERROR: ECHO: Write Failed..\n");
+		printf("ERROR %d: ECHO: Write Failed..\n", err_no);
     
 	/* Configure ESP8266 in STATION mode */
-	esp8266_write(esp_fd, WIFI_MODE_SET_STA, strlen(WIFI_MODE_SET_STA));
-	err_no = esp8266_status(esp_fd, NULL);
+	err_no = esp8266_write(esp_fd, WIFI_MODE_SET_STA,
+			       strlen(WIFI_MODE_SET_STA));
+
+	if (!err_no)
+		err_no = esp8266_status(esp_fd, NULL);
+
 	if (!err_no)
 		printf("Started as STATION..\n");
 	else {
-		printf("ERROR: Cannot start as STATION..\n");
-		exit(0);
+		printf("ERROR %d: Cannot start as STATION..\n", err_no);
+		return -1;
 	}
 
 	/* Enable DHCP Client in STATION mode */
-	esp8266_write(esp_fd, ESP_DHCP_CLIENT_ENABLE,
-		      strlen(ESP_DHCP_CLIENT_ENABLE));
-	err_no = esp8266_status(esp_fd, NULL);
+	err_no = esp8266_write(esp_fd, ESP_DHCP_CLIENT_ENABLE,
+			       strlen(ESP_DHCP_CLIENT_ENABLE));
+
+	if (!err_no)
+		err_no = esp8266_status(esp_fd, NULL);
+
 	if (!err_no)
 		printf("DHCP client enabled..\n");
+	return -1;
 }
 
 void esp8266_stop(int esp_fd)
@@ -253,14 +275,14 @@ void esp8266_get_info(char *ssid)
   esp8266_write(esp_fd, AP_SSID_GET, strlen(AP_SSID_GET));
 */
 
-void esp8266_scan()
+void esp8266_scan(int esp_fd)
 {
 	char line_buf[RECV_BUF_SIZE] = {'\0'};
 	int error;
 
-	read_buf[0] = '\0'; /* To clear read_buf */
+	read_buf[0] = '\0';
 
-	printf("Scan APs..\n");
+	printf("Scanning for APs in range..\n");
 	esp8266_write(esp_fd, SCAN_AP, strlen(SCAN_AP));
 
 	/* Checks whether the write operation is successful or failed */
